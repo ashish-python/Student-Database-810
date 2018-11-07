@@ -186,7 +186,7 @@ class TestSuite(unittest.TestCase):
     def test_repository(self):
         #these test files are in correct format
         
-        test = Repository(r'C:\Python\Test scripts\810\StudentDatabase\TestFiles',table=False)
+        test = Repository(r'StudentDatabase\TestFiles',table=False)
         repository_test = test.main()
         self.assertEqual(repository_test['students'],[['10103', 'Baldwin, C', ['CS 501', 'SSW 564', 'SSW 567', 'SSW 687']],['10115', 'Wyatt, X', ['CS 545', 'SSW 564', 'SSW 567', 'SSW 687']]])
         self.assertEqual(repository_test['instructors'],[['98765', 'Einstein, A', 'SFEN', 'SSW 567', 2], ['98764', 'Feynman, R', 'SFEN', 'SSW 564', 2], ['98764', 'Feynman, R', 'SFEN', 'SSW 687', 2], ['98764', 'Feynman, R', 'SFEN', 'CS 501', 1], ['98764', 'Feynman, R', 'SFEN', 'CS 545', 1]])
@@ -197,14 +197,14 @@ class TestSuite(unittest.TestCase):
         # TestFilesMissingStudent - grades.txt file has a grade or course for a student but no student with that cwid in students.txt
         # TestFilesMissingInstructor - grades.txt file has course taught by an instructor but no instructor with that cwid in instructors.txt
         for key, errortype in test_dict.items():
-            test= Repository(r'C:\Python\Test scripts\810\StudentDatabase\\'+key,table=False)
+            test= Repository(r'StudentDatabase\\'+key,table=False)
             with self.assertRaises(errortype):
                 repository_test = test.main()
 
 
 def main():
     try:
-        stevens = Repository(r'C:\Python\Test scripts\810\StudentDatabase\Stevens') # read files and generate prettytables
+        stevens = Repository(r'StudentDatabase\Stevens') # read files and generate prettytables
         stevens.main()
     except FileNotFoundError as e:
         print(e)
