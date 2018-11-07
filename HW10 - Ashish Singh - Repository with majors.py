@@ -135,7 +135,7 @@ class Repository():
         for cwid,name,major in file_reader(path,num_fields,separator,file_name):
             #check if the major is provided
             if major not in majors:
-                raise KeyError('Attempting to add major - {} for student cwid - {}. This major is not provided by {}'.format(major,cwid,college_name))
+                raise ValueError('Attempting to add major - {} for student cwid - {}. This major is not provided by {}'.format(major,cwid,college_name))
             student = Student(cwid,name,major)
             #add Student object to college_repository
             college_repository[college_name]['students'][cwid]=student            
@@ -203,8 +203,7 @@ class Repository():
                     required_completed.add(course)
                 elif course in Repository.majors_list[student.major]['E']:
                     electives_completed.add(course)
-            #student.required_completed = required
-            #student.electives_completed = elective
+            
             required_remaining = Repository.majors_list[student.major]['R'] - required_completed       
                         
             if(len(required_remaining)==0):
@@ -213,7 +212,6 @@ class Repository():
                 electives_remaining = 'None'
             else:
                 electives_remaining = Repository.majors_list[student.major]['E'] - electives_completed
-
 
             if not self.table:
                 summary_list['students'].append([student.cwid,student.name,sorted_dict,required_remaining,electives_remaining])
@@ -246,27 +244,26 @@ class TestSuite(unittest.TestCase):
     def test_repository(self):
         #these test files are in correct format
         
-        test = Repository(r'StudentDatabase\TestFiles',table=False)
+        test = Repository(r'C:\Python\Test scripts\810\StudentDatabase\TestFiles',table=False)
         repository_test = test.main()
         self.assertEqual(repository_test['students'],[['10103', 'Baldwin, C', ['CS 501', 'SSW 564', 'SSW 567', 'SSW 687'],{'SSW 555', 'SSW 540'}, 'None'],['10115', 'Wyatt, X', ['SSW 564', 'SSW 567', 'SSW 687'],{'SSW 555', 'SSW 540'},{'CS 501', 'CS 513', 'CS 545'}]])
         self.assertEqual(repository_test['instructors'],[['98765', 'Einstein, A', 'SFEN', 'SSW 567', 2], ['98764', 'Feynman, R', 'SFEN', 'SSW 564', 2], ['98764', 'Feynman, R', 'SFEN', 'SSW 687', 2], ['98764', 'Feynman, R', 'SFEN', 'CS 501', 1], ['98764', 'Feynman, R', 'SFEN', 'CS 545', 1]])
         self.assertEqual(repository_test['majors'],[['SFEN', ['SSW 540', 'SSW 555', 'SSW 564', 'SSW 567'], ['CS 501', 'CS 513', 'CS 545']], ['SYEN', ['SYS 612', 'SYS 671', 'SYS 800'], ['SSW 540', 'SSW 565', 'SSW 810']]])
 
-        test_dict = {"TestFilesBlankValues":ValueError,"TestFilesMissingStudent":KeyError,"TestFilesMissingInstructor":KeyError,"TestFilesUnknownMajor":KeyError}
+        test_dict = {"TestFilesBlankValues":ValueError,"TestFilesMissingStudent":KeyError,"TestFilesMissingInstructor":KeyError,"TestFilesUnknownMajor":ValueError}
         #Tests for:
         # TestFilesBlankValues - grades.txt file has missing values (allows missing values for grades, raises exception for all others)
         # TestFilesMissingStudent - grades.txt file has a grade or course for a student but no student with that cwid in students.txt
         # TestFilesMissingInstructor - grades.txt file has course taught by an instructor but no instructor with that cwid in instructors.txt
         # TestFilesUnknownMajor - students.txt has 'UNKNOWN_MAJOR' as the major for student cwid 11788
         for key, errortype in test_dict.items():
-            test= Repository(r'StudentDatabase\\'+key,table=False)
+            test= Repository(r'C:\Python\Test scripts\810\StudentDatabase\\'+key,table=False)
             with self.assertRaises(errortype):
                 repository_test = test.main()
 
-
 def main():
     try:
-        stevens = Repository(r'StudentDatabase\Stevens') # read files and generate prettytables
+        stevens = Repository(r'C:\Python\Test scripts\810\StudentDatabase\Stevens') # read files and generate prettytables
         stevens.main()
     except FileNotFoundError as e:
         print(e)
