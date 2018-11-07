@@ -1,5 +1,5 @@
 '''
-author: Ashish Singh
+Author: Ashish Singh
 
 Repository() class is the container for Student and Instructor objects. The main() method may print summary pretty tables or
 return a list of results for testing. Set parameter table=False for testing e.g. rep = Repository(path,table=False)
