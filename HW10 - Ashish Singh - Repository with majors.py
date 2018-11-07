@@ -244,7 +244,7 @@ class TestSuite(unittest.TestCase):
     def test_repository(self):
         #these test files are in correct format
         
-        test = Repository(r'C:\Python\Test scripts\810\StudentDatabase\TestFiles',table=False)
+        test = Repository(r'StudentDatabase\TestFiles',table=False)
         repository_test = test.main()
         self.assertEqual(repository_test['students'],[['10103', 'Baldwin, C', ['CS 501', 'SSW 564', 'SSW 567', 'SSW 687'],{'SSW 555', 'SSW 540'}, 'None'],['10115', 'Wyatt, X', ['SSW 564', 'SSW 567', 'SSW 687'],{'SSW 555', 'SSW 540'},{'CS 501', 'CS 513', 'CS 545'}]])
         self.assertEqual(repository_test['instructors'],[['98765', 'Einstein, A', 'SFEN', 'SSW 567', 2], ['98764', 'Feynman, R', 'SFEN', 'SSW 564', 2], ['98764', 'Feynman, R', 'SFEN', 'SSW 687', 2], ['98764', 'Feynman, R', 'SFEN', 'CS 501', 1], ['98764', 'Feynman, R', 'SFEN', 'CS 545', 1]])
@@ -257,13 +257,13 @@ class TestSuite(unittest.TestCase):
         # TestFilesMissingInstructor - grades.txt file has course taught by an instructor but no instructor with that cwid in instructors.txt
         # TestFilesUnknownMajor - students.txt has 'UNKNOWN_MAJOR' as the major for student cwid 11788
         for key, errortype in test_dict.items():
-            test= Repository(r'C:\Python\Test scripts\810\StudentDatabase\\'+key,table=False)
+            test= Repository(r'StudentDatabase\\'+key,table=False)
             with self.assertRaises(errortype):
                 repository_test = test.main()
 
 def main():
     try:
-        stevens = Repository(r'C:\Python\Test scripts\810\StudentDatabase\Stevens') # read files and generate prettytables
+        stevens = Repository(r'StudentDatabase\Stevens') # read files and generate prettytables
         stevens.main()
     except FileNotFoundError as e:
         print(e)
