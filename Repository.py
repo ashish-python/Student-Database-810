@@ -1,9 +1,9 @@
 '''
 author: Ashish Singh
 
-Repository() class is the container for Student and Instructor objects. It also adds the required and elective courses 
+Repository() class is the container for Student,Instructor and Major objects. It also adds the required and elective courses 
 for each of the majors in a dictionary, where the key is the major and the items are sets containing the courses. The main() method may print summary pretty tables or
-return a list of results for testing. Set parameter table=False for testing e.g. rep = Repository(path,table=False)
+return a list of results for testing. Set parameter table=False for testing e.g. rep = Repository(path to data files,table=False)
 
 Student objects include cwid,name,course, and grades_dictionary instance attributes
 
@@ -14,12 +14,15 @@ TestSuite class has test methods for the Repository class.
 file_reader is a generator that reads each line from a file, splits the line based on a separator and yields the results as a tuple.
 Note that the generator does not allow blank values except for grades.
 
+prettytable_from_db() method establishes a database connection and queries 'instructors' and 'grades' tables to generate instructors summary
+
 '''
 
 import os
 import prettytable
 from collections import defaultdict
 import unittest
+import sqlite3
 
 def file_reader(path,num_fields,separator,file_name,header=False):
     try:        
@@ -59,18 +62,19 @@ def file_reader(path,num_fields,separator,file_name,header=False):
                 #All checks complete. Yield values
                 yield tuple(chars)
                 line_num+=1
-        print("File closed")
+        #print("File closed")
 
 
 class Student():
-    __slots__ = ['cwid','name','major','majorobj','completed_courses','required_completed','electives_completed']
+    __slots__ = ['cwid','name','major','majorobj','completed_courses','required_remaining','electives_remaining']
 
     valid_grades = ('A','A-','B+','B','B-','C+','C')  
 
-    def __init__(self,cwid,name,major):
+    def __init__(self,cwid,name,major,majorobj):
         self.cwid = cwid
         self.name = name
         self.major = major
+        self.majorobj = majorobj
         self.completed_courses = defaultdict(str)
           
     
@@ -92,10 +96,10 @@ class Instructor():
         self.course_students_count[course]+=1
 
 class Majors():
-    __slots__= ['majors','required','electives']
+    __slots__= ['majors_list']
 
     def __init__(self,majors_list):   
-        self.majors = majors_list
+        self.majors_list = majors_list
 
 class Repository():
     
@@ -104,29 +108,104 @@ class Repository():
     def __init__(self,path,table=True):
         self.path = path
         self.table = table
+        self.summary_list = defaultdict(list)
     
+    def print_prettytable(self,label,table_name,fieldnames,obj):
+        
+        pt = prettytable.PrettyTable(field_names=fieldnames)
+              
+        if(table_name=='majors'):
+            if self.table:
+                print(label)
+            for major in obj.majors_list:
+                if self.table:
+                    pt.add_row([major,sorted(obj.majors_list[major]['R']),sorted(obj.majors_list[major]['E'])])
+                else:
+                    self.summary_list['majors'].append([major,sorted(obj.majors_list[major]['R']),sorted(obj.majors_list[major]['E'])])
+            if self.table:
+                print(pt)
+        elif(table_name=="instructors"):
+            if self.table:
+                print(label)         
+            for cwid,instructor in obj.items():                
+                for course,count in instructor.course_students_count.items():
+                    if self.table:
+                        pt.add_row([instructor.cwid,instructor.name,instructor.department,course,count])
+                    else:
+                        self.summary_list['instructors'].append([instructor.cwid,instructor.name,instructor.department,course,count])
+            if self.table:  
+                print(pt)
+                #instructor prettytable from database                
+        elif(table_name=='students'):
+            if self.table:
+                print(label)
+            for cwid,student in obj.items():
+                sorted_dict = sorted(student.completed_courses)
+                self.check_required_remaining_courses(student)
+                if self.table:
+                    pt.add_row([student.cwid,student.name,sorted_dict,student.required_remaining,student.electives_remaining])
+                else:
+                    self.summary_list['students'].append([student.cwid,student.name,sorted_dict,student.required_remaining,student.electives_remaining])
+            if self.table:
+                print(pt)
+
+        if not self.table:
+            return self.summary_list
+        
+    def prettytable_from_db(self,label,fieldnames,DB_FILE,query):
+            print(label)
+            db = sqlite3.connect(DB_FILE)
+            pt_instructor_db = prettytable.PrettyTable(field_names=fieldnames)
+            for row in db.execute(query):
+                pt_instructor_db.add_row(list(row))
+            print(pt_instructor_db)
+            db.close()    
+    
+    def check_required_remaining_courses(self,student):
+            #sorted_dict = sorted(student.completed_courses)
+            #check remaining required and elective courses
+            electives_completed = set()
+            required_completed = set()
+            for course in student.completed_courses:
+                if course in student.majorobj.majors_list[student.major]['R']:
+                    required_completed.add(course)
+                elif course in student.majorobj.majors_list[student.major]['E']:
+                    electives_completed.add(course)
+            
+            required_remaining = student.majorobj.majors_list[student.major]['R'] - required_completed       
+                        
+            if(len(required_remaining)==0):
+                student.required_remaining = 'None'
+            else:
+                student.required_remaining = student.majorobj.majors_list[student.major]['R'] - required_completed
+            
+            if(len(electives_completed)>0):
+                student.electives_remaining = 'None'
+            else:
+                student.electives_remaining = student.majorobj.majors_list[student.major]['E'] - electives_completed
+        
+
     def main(self):
         
         #The line below will create a dictionary structure: {Stevens: {students:{id1:Student(),id2:Student()}},{instructors:{id1:{course1:count1,course2:count2}}}
-        college_repository = defaultdict(lambda: defaultdict(lambda:dict()))
+        college_repository = defaultdict(lambda: defaultdict(dict))
         college_name = os.path.basename(self.path)
         majors = set()
 
-        #Dictionary to store majors, required and elective courses
 
-         #read majors.txt and add the list of required and electives for each major to class variable majors_list
+        #read majors.txt and add the list of required and electives for each major to class variable majors_list
         num_fields=3
         separator="\t"
         file_name='majors'
         path = os.path.join(self.path,'majors.txt')
-        
+        #majors_list is a dictionary of type: majors_list[major]['R' or 'E'] = {cours1,course2...}
         for major,course_type,course in file_reader(path,num_fields,separator,file_name):
             Repository.majors_list[major][course_type].add(course)
             majors.add(major)
+        #create Majors object and add to college_repository
+        majorobj = Majors(Repository.majors_list)
+        college_repository[college_name]['majors']=majorobj
 
-        #majorobj = Majors(Repository.majors_list)
-        #college_repository[college_name]['majors'][major]=majorobj
-                
         #read students.txt, create Student() instance and add  to repository
         num_fields=3
         separator="\t"
@@ -136,7 +215,7 @@ class Repository():
             #check if the major is provided
             if major not in majors:
                 raise ValueError('Attempting to add major - {} for student cwid - {}. This major is not provided by {}'.format(major,cwid,college_name))
-            student = Student(cwid,name,major)
+            student = Student(cwid,name,major,majorobj)
             #add Student object to college_repository
             college_repository[college_name]['students'][cwid]=student            
 
@@ -171,72 +250,30 @@ class Repository():
 
 
         #-------------------------------- PRINT SUMMARY TABLES--------------------------------------------------
-        #if table==False return list else print prettytable
-
-        if not self.table:
-            summary_list = defaultdict(list)
+        #if table==False return list else print prettytable        
+        
         #majors prettytable
-        if self.table:
-            print("Majors Summary")
-            pt_majors = prettytable.PrettyTable(field_names=['Dept','Required','Electives'])
+        label = "Majors Summary"
+        table_name='majors'
+        field_names = ['Dept','Required','Electives']
+        self.print_prettytable(label,table_name,field_names,college_repository[college_name][table_name])
         
-        for major in Repository.majors_list:
-            if self.table:
-                pt_majors.add_row([major,sorted(Repository.majors_list[major]['R']),sorted(Repository.majors_list[major]['E'])])
-            else:
-                summary_list['majors'].append([major,sorted(Repository.majors_list[major]['R']),sorted(Repository.majors_list[major]['E'])])
-        if self.table:
-            print(pt_majors)
+        #student prettytable
+        
+        label = "Student Summary"
+        table_name='students'
+        field_names = ['CWID','Name','Completed Courses','Remaining Required','Remaining Electives']
+        self.print_prettytable(label,table_name,field_names,college_repository[college_name]['students'])
 
-        #student prettytable        
-        if self.table:
-            print("Student Summary")
-            pt_student = prettytable.PrettyTable(field_names=['CWID','Name','Completed Courses','Remaining Required','Remaining Electives'])
-        
-        for cwid,student in college_repository[college_name]['students'].items():
-            sorted_dict = sorted(student.completed_courses)
-            #check remaining required and elective courses
-            electives_completed = set()
-            required_completed = set()
-            for course in student.completed_courses:
-                if course in Repository.majors_list[student.major]['R']:
-                    required_completed.add(course)
-                elif course in Repository.majors_list[student.major]['E']:
-                    electives_completed.add(course)
-            
-            required_remaining = Repository.majors_list[student.major]['R'] - required_completed       
-                        
-            if(len(required_remaining)==0):
-                required_remaining = 'None'
-            if(len(electives_completed)>0):
-                electives_remaining = 'None'
-            else:
-                electives_remaining = Repository.majors_list[student.major]['E'] - electives_completed
+        #instructors prettytable
+        label = "Instructor Summary"
+        table_name='instructors'
+        field_names=['CWID','Name','Dept','Course','Students']
+        self.print_prettytable(label,table_name,field_names,college_repository[college_name]['instructors'])
 
-            if not self.table:
-                summary_list['students'].append([student.cwid,student.name,sorted_dict,required_remaining,electives_remaining])
-            else:
-                pt_student.add_row([student.cwid,student.name,sorted_dict,required_remaining,electives_remaining])
-        if self.table:
-            print(pt_student)
-        
-        #instructor prettytable
-        if self.table:
-            print("Instructor Summary")
-            pt_instructor = prettytable.PrettyTable(field_names=['CWID','Name','Dept','Course','Students'])
-        for cwid,instructor in college_repository[college_name]['instructors'].items():                
-            for course,count in instructor.course_students_count.items():
-                if not self.table:
-                    summary_list['instructors'].append([instructor.cwid,instructor.name,instructor.department,course,count])
-                else:
-                    pt_instructor.add_row([instructor.cwid,instructor.name,instructor.department,course,count])
-                #print(instructor.cwid,instructor.name,instructor.department,course,count)
-        
+        #For testing
         if not self.table:
-            return summary_list
-        else:
-            print(pt_instructor)
-                
+            return self.summary_list         
     
 
 class TestSuite(unittest.TestCase):
@@ -246,13 +283,15 @@ class TestSuite(unittest.TestCase):
         
         test = Repository(r'StudentDatabase\TestFiles',table=False)
         repository_test = test.main()
+        
         self.assertEqual(repository_test['students'],[['10103', 'Baldwin, C', ['CS 501', 'SSW 564', 'SSW 567', 'SSW 687'],{'SSW 555', 'SSW 540'}, 'None'],['10115', 'Wyatt, X', ['SSW 564', 'SSW 567', 'SSW 687'],{'SSW 555', 'SSW 540'},{'CS 501', 'CS 513', 'CS 545'}]])
         self.assertEqual(repository_test['instructors'],[['98765', 'Einstein, A', 'SFEN', 'SSW 567', 2], ['98764', 'Feynman, R', 'SFEN', 'SSW 564', 2], ['98764', 'Feynman, R', 'SFEN', 'SSW 687', 2], ['98764', 'Feynman, R', 'SFEN', 'CS 501', 1], ['98764', 'Feynman, R', 'SFEN', 'CS 545', 1]])
         self.assertEqual(repository_test['majors'],[['SFEN', ['SSW 540', 'SSW 555', 'SSW 564', 'SSW 567'], ['CS 501', 'CS 513', 'CS 545']], ['SYEN', ['SYS 612', 'SYS 671', 'SYS 800'], ['SSW 540', 'SSW 565', 'SSW 810']]])
 
         test_dict = {"TestFilesBlankValues":ValueError,"TestFilesMissingStudent":KeyError,"TestFilesMissingInstructor":KeyError,"TestFilesUnknownMajor":ValueError}
         #Tests for:
-        # TestFilesBlankValues - grades.txt file has missing values (allows missing values for grades, raises exception for all others)
+        # TestFilesBlankValues - grades.txt file has missing values (allows mi
+        # ssing values for grades, raises exception for all others)
         # TestFilesMissingStudent - grades.txt file has a grade or course for a student but no student with that cwid in students.txt
         # TestFilesMissingInstructor - grades.txt file has course taught by an instructor but no instructor with that cwid in instructors.txt
         # TestFilesUnknownMajor - students.txt has 'UNKNOWN_MAJOR' as the major for student cwid 11788
@@ -265,6 +304,16 @@ def main():
     try:
         stevens = Repository(r'StudentDatabase\Stevens') # read files and generate prettytables
         stevens.main()
+
+        #print instructor prettytable from database
+        DB_FILE = r"810_startup.db"
+        field_names=['CWID','Name','Dept','Course','Students']        
+        query="""select i.*, g.course,count(*) as students from instructors i join grades g on g.'Grade Instructor_CWID'=i.CWID 
+        group by course order by i.Dept, count(*) DESC"""
+        label = "Instructor Summary from Database"        
+        stevens.prettytable_from_db(label,field_names,DB_FILE,query)
+        
+
     except FileNotFoundError as e:
         print(e)
     except ValueError as e:
@@ -274,6 +323,4 @@ def main():
 main()
 
 if __name__=="__main__":
-    unittest.main(verbosity=2,exit=False)
-
-    
+    unittest.main(verbosity=2,exit=False)   
