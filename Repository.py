@@ -1,7 +1,8 @@
 '''
 author: Ashish Singh
 
-Repository() class is the container for Student and Instructor objects .The main() method may print summary pretty tables or
+Repository() class is the container for Student and Instructor objects. It also adds the required and elective courses 
+for each of the majors in a dictionary, where the key is the major and the items are sets containing the courses. The main() method may print summary pretty tables or
 return a list of results for testing. Set parameter table=False for testing e.g. rep = Repository(path,table=False)
 
 Student objects include cwid,name,course, and grades_dictionary instance attributes
@@ -62,21 +63,24 @@ def file_reader(path,num_fields,separator,file_name,header=False):
 
 
 class Student():
-    __slots__ = ['cwid','name','major','grades_dictionary']
+    __slots__ = ['cwid','name','major','majorobj','completed_courses','required_completed','electives_completed']
+
+    valid_grades = ('A','A-','B+','B','B-','C+','C')  
 
     def __init__(self,cwid,name,major):
         self.cwid = cwid
         self.name = name
         self.major = major
-        self.grades_dictionary = defaultdict(str)
+        self.completed_courses = defaultdict(str)
+          
     
-    def add_grade(self,course,grade):
-        self.grades_dictionary[course]=grade
+    def add_grade(self,course,grade):       
+        if grade in Student.valid_grades:
+            self.completed_courses[course]=grade
 
-
+ 
 class Instructor():
     __slots__= ['cwid','name','department','course_students_count']
-
 
     def __init__(self,cwid,name,department):
         self.cwid = cwid
@@ -87,9 +91,15 @@ class Instructor():
     def add_course_count(self,course):
         self.course_students_count[course]+=1
 
+class Majors():
+    __slots__= ['majors','required','electives']
+
+    def __init__(self,majors_list):   
+        self.majors = majors_list
 
 class Repository():
     
+    majors_list = defaultdict(lambda: defaultdict(set))  
     #if table == True return the summary as a list for testing, otherwise print prettytable
     def __init__(self,path,table=True):
         self.path = path
@@ -99,20 +109,37 @@ class Repository():
         
         #The line below will create a dictionary structure: {Stevens: {students:{id1:Student(),id2:Student()}},{instructors:{id1:{course1:count1,course2:count2}}}
         college_repository = defaultdict(lambda: defaultdict(lambda:dict()))
-        college_name = os.path.basename(self.path) 
-                   
+        college_name = os.path.basename(self.path)
+        majors = set()
+
+        #Dictionary to store majors, required and elective courses
+
+         #read majors.txt and add the list of required and electives for each major to class variable majors_list
+        num_fields=3
+        separator="\t"
+        file_name='majors'
+        path = os.path.join(self.path,'majors.txt')
         
-            #read students.txt, create Student() instance and add  to repository
+        for major,course_type,course in file_reader(path,num_fields,separator,file_name):
+            Repository.majors_list[major][course_type].add(course)
+            majors.add(major)
+
+        #majorobj = Majors(Repository.majors_list)
+        #college_repository[college_name]['majors'][major]=majorobj
+                
+        #read students.txt, create Student() instance and add  to repository
         num_fields=3
         separator="\t"
         file_name='students'
         path = os.path.join(self.path,"students.txt")
         for cwid,name,major in file_reader(path,num_fields,separator,file_name):
-            student = Student(cwid,name,major)            
+            #check if the major is provided
+            if major not in majors:
+                raise ValueError('Attempting to add major - {} for student cwid - {}. This major is not provided by {}'.format(major,cwid,college_name))
+            student = Student(cwid,name,major)
             #add Student object to college_repository
-            college_repository[college_name]['students'][cwid]=student
+            college_repository[college_name]['students'][cwid]=student            
 
-        
         #read instructors.txt, create Instructor() instance and add to repository
         num_fields=3
         separator="\t"
@@ -123,14 +150,13 @@ class Repository():
             #add instructor object to college_repository
             college_repository[college_name]['instructors'][cwid]=instructor
             
-
+                            
         #read grades.txt, add courses and grades to Student defaultdict(str), add courses to Instructor and increase count for each student
         num_fields=4
         separator="\t"
         file_name='grades'
         path = os.path.join(self.path,"grades.txt")
-        for cwid,course,grade,instructor_cwid in file_reader(path,num_fields,separator,file_name):
-            
+        for cwid,course,grade,instructor_cwid in file_reader(path,num_fields,separator,file_name):            
             #add course and grade to Student
             try: #Raise KeyError if student cwid from grades.txt is not present in students.txt
                 college_repository[college_name]['students'][cwid].add_grade(course,grade)
@@ -146,19 +172,51 @@ class Repository():
 
         #-------------------------------- PRINT SUMMARY TABLES--------------------------------------------------
         #if table==False return list else print prettytable
-        #student prettytable
+
         if not self.table:
             summary_list = defaultdict(list)
-        else:
+        #majors prettytable
+        if self.table:
+            print("Majors Summary")
+            pt_majors = prettytable.PrettyTable(field_names=['Dept','Required','Electives'])
+        
+        for major in Repository.majors_list:
+            if self.table:
+                pt_majors.add_row([major,sorted(Repository.majors_list[major]['R']),sorted(Repository.majors_list[major]['E'])])
+            else:
+                summary_list['majors'].append([major,sorted(Repository.majors_list[major]['R']),sorted(Repository.majors_list[major]['E'])])
+        if self.table:
+            print(pt_majors)
+
+        #student prettytable        
+        if self.table:
             print("Student Summary")
-            pt_student = prettytable.PrettyTable(field_names=['CWID','Name','Completed Courses'])
+            pt_student = prettytable.PrettyTable(field_names=['CWID','Name','Completed Courses','Remaining Required','Remaining Electives'])
         
         for cwid,student in college_repository[college_name]['students'].items():
-            sorted_dict = sorted(student.grades_dictionary)
-            if not self.table:
-                summary_list['students'].append([student.cwid,student.name,sorted_dict])
+            sorted_dict = sorted(student.completed_courses)
+            #check remaining required and elective courses
+            electives_completed = set()
+            required_completed = set()
+            for course in student.completed_courses:
+                if course in Repository.majors_list[student.major]['R']:
+                    required_completed.add(course)
+                elif course in Repository.majors_list[student.major]['E']:
+                    electives_completed.add(course)
+            
+            required_remaining = Repository.majors_list[student.major]['R'] - required_completed       
+                        
+            if(len(required_remaining)==0):
+                required_remaining = 'None'
+            if(len(electives_completed)>0):
+                electives_remaining = 'None'
             else:
-                pt_student.add_row([student.cwid,student.name,sorted_dict])
+                electives_remaining = Repository.majors_list[student.major]['E'] - electives_completed
+
+            if not self.table:
+                summary_list['students'].append([student.cwid,student.name,sorted_dict,required_remaining,electives_remaining])
+            else:
+                pt_student.add_row([student.cwid,student.name,sorted_dict,required_remaining,electives_remaining])
         if self.table:
             print(pt_student)
         
@@ -188,19 +246,20 @@ class TestSuite(unittest.TestCase):
         
         test = Repository(r'StudentDatabase\TestFiles',table=False)
         repository_test = test.main()
-        self.assertEqual(repository_test['students'],[['10103', 'Baldwin, C', ['CS 501', 'SSW 564', 'SSW 567', 'SSW 687']],['10115', 'Wyatt, X', ['CS 545', 'SSW 564', 'SSW 567', 'SSW 687']]])
+        self.assertEqual(repository_test['students'],[['10103', 'Baldwin, C', ['CS 501', 'SSW 564', 'SSW 567', 'SSW 687'],{'SSW 555', 'SSW 540'}, 'None'],['10115', 'Wyatt, X', ['SSW 564', 'SSW 567', 'SSW 687'],{'SSW 555', 'SSW 540'},{'CS 501', 'CS 513', 'CS 545'}]])
         self.assertEqual(repository_test['instructors'],[['98765', 'Einstein, A', 'SFEN', 'SSW 567', 2], ['98764', 'Feynman, R', 'SFEN', 'SSW 564', 2], ['98764', 'Feynman, R', 'SFEN', 'SSW 687', 2], ['98764', 'Feynman, R', 'SFEN', 'CS 501', 1], ['98764', 'Feynman, R', 'SFEN', 'CS 545', 1]])
-        
-        test_dict = {"TestFilesBlankValues":ValueError,"TestFilesMissingStudent":KeyError,"TestFilesMissingInstructor":KeyError}
+        self.assertEqual(repository_test['majors'],[['SFEN', ['SSW 540', 'SSW 555', 'SSW 564', 'SSW 567'], ['CS 501', 'CS 513', 'CS 545']], ['SYEN', ['SYS 612', 'SYS 671', 'SYS 800'], ['SSW 540', 'SSW 565', 'SSW 810']]])
+
+        test_dict = {"TestFilesBlankValues":ValueError,"TestFilesMissingStudent":KeyError,"TestFilesMissingInstructor":KeyError,"TestFilesUnknownMajor":ValueError}
         #Tests for:
         # TestFilesBlankValues - grades.txt file has missing values (allows missing values for grades, raises exception for all others)
         # TestFilesMissingStudent - grades.txt file has a grade or course for a student but no student with that cwid in students.txt
         # TestFilesMissingInstructor - grades.txt file has course taught by an instructor but no instructor with that cwid in instructors.txt
+        # TestFilesUnknownMajor - students.txt has 'UNKNOWN_MAJOR' as the major for student cwid 11788
         for key, errortype in test_dict.items():
             test= Repository(r'StudentDatabase\\'+key,table=False)
             with self.assertRaises(errortype):
                 repository_test = test.main()
-
 
 def main():
     try:
@@ -216,6 +275,5 @@ main()
 
 if __name__=="__main__":
     unittest.main(verbosity=2,exit=False)
-
 
     
