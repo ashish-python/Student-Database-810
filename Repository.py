@@ -103,13 +103,14 @@ class Majors():
 
 class Repository():
     
-    majors_list = defaultdict(lambda: defaultdict(set))  
+    #majors_list = defaultdict(lambda: defaultdict(set))  
     #if table == True return the summary as a list for testing, otherwise print prettytable
     def __init__(self,path,table=True):
         self.path = path
         self.table = table
         self.summary_list = defaultdict(list)
-    
+        self.majors_list = defaultdict(lambda: defaultdict(set))
+
     def print_prettytable(self,label,table_name,fieldnames,obj):
         
         pt = prettytable.PrettyTable(field_names=fieldnames)
@@ -200,10 +201,10 @@ class Repository():
         path = os.path.join(self.path,'majors.txt')
         #majors_list is a dictionary of type: majors_list[major]['R' or 'E'] = {cours1,course2...}
         for major,course_type,course in file_reader(path,num_fields,separator,file_name):
-            Repository.majors_list[major][course_type].add(course)
+            self.majors_list[major][course_type].add(course)
             majors.add(major)
         #create Majors object and add to college_repository
-        majorobj = Majors(Repository.majors_list)
+        majorobj = Majors(self.majors_list)
         college_repository[college_name]['majors']=majorobj
 
         #read students.txt, create Student() instance and add  to repository
@@ -281,7 +282,7 @@ class TestSuite(unittest.TestCase):
     def test_repository(self):
         #these test files are in correct format
         
-        test = Repository(r'StudentDatabase\TestFiles',table=False)
+        test = Repository(r'C:\Python\Test scripts\810\StudentDatabase\TestFiles',table=False)
         repository_test = test.main()
         
         self.assertEqual(repository_test['students'],[['10103', 'Baldwin, C', ['CS 501', 'SSW 564', 'SSW 567', 'SSW 687'],{'SSW 555', 'SSW 540'}, 'None'],['10115', 'Wyatt, X', ['SSW 564', 'SSW 567', 'SSW 687'],{'SSW 555', 'SSW 540'},{'CS 501', 'CS 513', 'CS 545'}]])
@@ -296,17 +297,17 @@ class TestSuite(unittest.TestCase):
         # TestFilesMissingInstructor - grades.txt file has course taught by an instructor but no instructor with that cwid in instructors.txt
         # TestFilesUnknownMajor - students.txt has 'UNKNOWN_MAJOR' as the major for student cwid 11788
         for key, errortype in test_dict.items():
-            test= Repository(r'StudentDatabase\\'+key,table=False)
+            test= Repository(r'C:\Python\Test scripts\810\StudentDatabase\\'+key,table=False)
             with self.assertRaises(errortype):
                 repository_test = test.main()
 
 def main():
     try:
-        stevens = Repository(r'StudentDatabase\Stevens') # read files and generate prettytables
+        stevens = Repository(r'C:\Python\Test scripts\810\StudentDatabase\Stevens') # read files and generate prettytables
         stevens.main()
 
         #print instructor prettytable from database
-        DB_FILE = r"810_startup.db"
+        DB_FILE = r"C:\SQLite\810_startup.db"
         field_names=['CWID','Name','Dept','Course','Students']        
         query="""select i.*, g.course,count(*) as students from instructors i join grades g on g.'Grade Instructor_CWID'=i.CWID 
         group by course order by i.Dept, count(*) DESC"""
